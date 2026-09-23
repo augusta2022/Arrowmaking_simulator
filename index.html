@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Qin bronze arrow production simulator: flow line vs cellular organisation, after Martinon-Torres et al. 2014.">
+<title>Arrow-making simulator</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* ── tokens ─────────────────────────────────────────────── */
+:root{
+  --ground:#EBEDE7; --plate:#F7F8F4; --plate-2:#E3E7DF; --sunk:#DDE2D9;
+  --ink:#141F1B; --ink-2:#4C5A54; --ink-3:#77857E;
+  --rule:#C6CDC3; --rule-soft:#D8DDD4; --grid:rgba(20,31,27,.055);
+  --accent:#16695C; --accent-soft:rgba(22,105,92,.10); --on-accent:#F7F8F4;
+  --bronze:#9C6A2A; --covered:#B9C2B8; --stroke:rgba(20,31,27,.55);
+  --shadow:0 1px 0 rgba(20,31,27,.05);
+  --b1:#C21F6B; --b2:#7A3FB5; --b3:#2F4858;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1412; --plate:#161E1B; --plate-2:#1E2724; --sunk:#111917;
+    --ink:#E7ECE8; --ink-2:#9DACA5; --ink-3:#7A8880;
+    --rule:#2B3733; --rule-soft:#222C29; --grid:rgba(231,236,232,.045);
+    --accent:#52B5A1; --accent-soft:rgba(82,181,161,.13); --on-accent:#0E1412;
+    --bronze:#CE9757; --covered:#39453F; --stroke:rgba(231,236,232,.5);
+    --shadow:0 1px 0 rgba(0,0,0,.3);
+    --b1:#F272AC; --b2:#B394EC; --b3:#8FB3C4;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1412; --plate:#161E1B; --plate-2:#1E2724; --sunk:#111917;
+  --ink:#E7ECE8; --ink-2:#9DACA5; --ink-3:#7A8880;
+  --rule:#2B3733; --rule-soft:#222C29; --grid:rgba(231,236,232,.045);
+  --accent:#52B5A1; --accent-soft:rgba(82,181,161,.13); --on-accent:#0E1412;
+  --bronze:#CE9757; --covered:#39453F; --stroke:rgba(231,236,232,.5);
+  --shadow:0 1px 0 rgba(0,0,0,.3);
+  --b1:#F272AC; --b2:#B394EC; --b3:#8FB3C4;
+}
+*{box-sizing:border-box}
+html{font-size:17px}
+@media (max-width:520px){html{font-size:16px}}
+body{margin:0; background:var(--ground); color:var(--ink);
+  font-family:Archivo,"Helvetica Neue",Arial,sans-serif; font-size:1rem; line-height:1.5;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:28px 28px}
+.wrap{max-width:1160px; margin:0 auto; padding:0 20px 56px}
+h1,h3,h4{margin:0; text-wrap:balance; font-weight:700; letter-spacing:-.015em}
+p{margin:0}
+button{font:inherit; color:inherit; cursor:pointer}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.mono,.v{font-family:"IBM Plex Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums}
+.eyebrow{font-family:"IBM Plex Mono",monospace; font-size:.66rem; letter-spacing:.15em; text-transform:uppercase; color:var(--ink-3)}
+.hint{font-size:.735rem; color:var(--ink-3); line-height:1.5}
+
+/* ── masthead ───────────────────────────────────────────── */
+header.mast{border-bottom:1px solid var(--rule); background:var(--plate)}
+.mast-in{max-width:1160px; margin:0 auto; padding:24px 20px 0; display:flex; flex-wrap:wrap; gap:26px; align-items:flex-end; justify-content:space-between}
+.mast h1{font-size:clamp(1.8rem,1.4rem + 1.5vw,2.7rem); line-height:1.02}
+.mast h1 .sub{display:block; font-family:Newsreader,serif; font-weight:400; font-style:italic; font-size:.4em; color:var(--ink-2); letter-spacing:0; margin-top:8px}
+.credit{font-family:"IBM Plex Mono",monospace; font-size:.655rem; line-height:1.75; color:var(--ink-3); text-align:right}
+.credit b{color:var(--ink-2); font-weight:500}
+nav.steps{max-width:1160px; margin:0 auto; padding:20px 20px 0; display:flex; gap:2px; flex-wrap:wrap}
+.step{border:1px solid var(--rule); border-bottom:none; background:transparent; padding:9px 15px 10px;
+  display:flex; gap:10px; align-items:baseline; font-size:.86rem; font-weight:600; color:var(--ink-3); margin-bottom:-1px}
+.step .n{font-family:"IBM Plex Mono",monospace; font-size:.7rem}
+.step:hover{color:var(--ink-2); background:var(--plate-2)}
+.step[aria-current="true"]{background:var(--ground); color:var(--ink)}
+.step[aria-current="true"] .n{color:var(--accent)}
+.step .tick{color:var(--accent); font-size:.8rem}
+
+/* ── shell ──────────────────────────────────────────────── */
+.phase{display:none; padding-top:24px}
+.phase.on{display:block}
+.task{border-left:2px solid var(--accent); padding:1px 0 1px 15px; margin-bottom:20px; max-width:74ch;
+  font-family:Newsreader,serif; font-size:1rem; line-height:1.55; color:var(--ink-2)}
+.task b{display:block; margin-bottom:5px; color:var(--ink); font-family:Archivo,sans-serif;
+  font-size:.72rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase}
+.plate{background:var(--plate); border:1px solid var(--rule); box-shadow:var(--shadow)}
+.plate-hd{display:flex; justify-content:space-between; align-items:baseline; gap:14px; padding:11px 16px; border-bottom:1px solid var(--rule-soft)}
+.plate-hd h3{font-size:.83rem}
+.btn{border:1px solid var(--rule); background:var(--plate-2); padding:7px 11px; font-size:.755rem; font-weight:600}
+.btn:hover:not(:disabled){border-color:var(--accent); color:var(--accent); background:var(--accent-soft)}
+.btn:disabled{opacity:.4; cursor:not-allowed}
+.btn.pour{background:var(--ink); color:var(--ground); border-color:var(--ink)}
+.btn.pour:hover:not(:disabled){background:var(--accent); border-color:var(--accent); color:var(--on-accent)}
+.btn.ghostbtn{background:transparent}
+
+/* ── melt key ───────────────────────────────────────────── */
+.key{display:flex; flex-wrap:wrap; gap:8px 22px; align-items:center; padding:10px 16px;
+  background:var(--sunk); border-bottom:1px solid var(--rule-soft)}
+.key .caption{font-size:.755rem; color:var(--ink-2); max-width:34ch; line-height:1.4}
+.key .caption b{color:var(--ink); font-weight:600}
+.key .set{display:flex; gap:9px; align-items:center; flex-wrap:wrap}
+.key .set > .eyebrow{margin-right:1px}
+.chip{display:flex; align-items:center; gap:6px; border:1px solid var(--rule); background:var(--plate); padding:3px 7px 3px 4px}
+.chip i{width:13px; height:13px; display:block; border:1px solid var(--stroke)}
+.chip .mono{font-size:.635rem; color:var(--ink-2); line-height:1.25}
+.chip .mono b{color:var(--ink); font-weight:600}
+
+/* ── casting units ──────────────────────────────────────── */
+.castwrap{padding:15px; background:var(--sunk); display:flex; flex-direction:column; gap:17px}
+.castgroup{display:flex; flex-direction:column; gap:9px}
+.grouphd{display:flex; gap:11px; align-items:baseline; flex-wrap:wrap;
+  font-family:"IBM Plex Mono",monospace; font-size:.69rem; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--ink-2)}
+.grouphd .ghint{font-family:Archivo,sans-serif; letter-spacing:.01em; text-transform:none;
+  font-size:.74rem; color:var(--ink-3)}
+.castrow{display:grid; grid-template-columns:repeat(3,1fr); gap:12px}
+@media (max-width:760px){.castrow{grid-template-columns:1fr}}
+.unit{background:var(--plate); border:2px solid var(--rule); padding:11px 12px 12px;
+  display:flex; flex-direction:column; gap:8px}
+.unit-hd{display:flex; justify-content:space-between; align-items:center; gap:8px}
+.unit-hd h4{font-size:.78rem}
+.unit .btn.pour{width:100%; text-align:center; font-size:.73rem; padding:7px 8px}
+.furnace{position:relative; width:28px; height:23px; flex:none}
+.crucible{transform-origin:62% 70%; display:block}
+.stream{position:absolute; left:14px; top:16px; width:4px; height:0; border-radius:2px;
+  background:linear-gradient(#FFF0B4,#FFA23A,#DD4E16); opacity:0}
+.pouring .crucible{animation:tip .95s ease-in-out}
+.pouring .stream{animation:flow .8s ease-out .16s}
+@keyframes tip{0%,100%{transform:rotate(0)}22%,72%{transform:rotate(-42deg)}}
+@keyframes flow{0%{height:0;opacity:0}14%{opacity:1}75%{height:30px;opacity:1}100%{height:30px;opacity:0}}
+@keyframes cool{
+  0%{filter:brightness(2.5) saturate(.3) sepia(1) hue-rotate(-24deg); box-shadow:0 0 15px 3px rgba(255,140,40,.7)}
+  45%{filter:brightness(1.6) saturate(.65) sepia(.45) hue-rotate(-11deg); box-shadow:0 0 9px 1px rgba(255,150,60,.35)}
+  100%{filter:none; box-shadow:0 0 0 0 rgba(255,150,60,0)}}
+.fresh{animation:cool 1s ease-out}
+.trays{display:flex; flex-wrap:wrap; gap:7px; min-height:54px; align-items:flex-start; align-content:flex-start}
+.tray-card{border:1px solid var(--rule); background:var(--plate-2); padding:5px 7px 4px; cursor:grab;
+  display:flex; flex-direction:column; align-items:center; gap:2px; touch-action:none;
+  transition:transform .12s, border-color .12s}
+.tray-card:hover{border-color:var(--accent); transform:translateY(-2px)}
+.tray-card .pcs{display:flex; gap:2px; line-height:0}
+.tray-card .code{font-family:"IBM Plex Mono",monospace; font-size:.6rem; color:var(--ink-2); font-weight:500}
+.tray-empty{font-size:.735rem; color:var(--ink-3); align-self:center}
+
+/* ── bin + assembly ─────────────────────────────────────── */
+.flowarrow{display:flex; align-items:center; justify-content:center; gap:9px; padding:7px 0;
+  background:var(--sunk); border-top:1px solid var(--rule-soft); border-bottom:1px solid var(--rule-soft);
+  font-family:"IBM Plex Mono",monospace; font-size:.625rem; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-3)}
+.bin{background:var(--sunk); padding:13px 15px 15px}
+.bin-hd{display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin-bottom:9px}
+.bin-cols{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+@media (max-width:720px){.bin-cols{grid-template-columns:1fr}}
+.bin-col{border:1px dashed var(--rule); background:var(--plate); padding:9px 10px; min-height:70px}
+.bin-col.over{border-style:solid; border-color:var(--accent); background:var(--accent-soft)}
+.bin-col > .eyebrow{display:block; margin-bottom:7px}
+.pile{display:flex; flex-wrap:wrap; gap:4px; line-height:0}
+.fd{cursor:pointer; touch-action:none; padding:3px; border:1px solid transparent; line-height:0; background:none}
+.fd:hover:not(:disabled){border-color:var(--accent); background:var(--accent-soft)}
+.fd:disabled{opacity:.38; cursor:not-allowed}
+.asm.locked .jig{opacity:.4}
+.asm.locked #asmNote{color:var(--bronze)}
+.asm{background:var(--plate); padding:14px 15px 16px; display:grid; grid-template-columns:minmax(0,1fr) 1fr; gap:18px}
+@media (max-width:820px){.asm{grid-template-columns:1fr}}
+.jig{display:flex; gap:12px; align-items:center; justify-content:center; flex-wrap:wrap; padding:10px 0 4px}
+.slot{width:112px; height:52px; border:1px dashed var(--rule); background:var(--plate-2); display:grid; place-items:center; position:relative}
+.slot.full{border-style:solid; border-color:var(--rule-soft); background:transparent}
+.slot .lab{position:absolute; top:-8px; left:8px; background:var(--plate); padding:0 5px;
+  font-family:"IBM Plex Mono",monospace; font-size:.59rem; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3)}
+@keyframes bindin{from{transform:translateX(-9px); opacity:.3}to{transform:none; opacity:1}}
+.bound{animation:bindin .3s ease-out; line-height:0}
+.rack{display:flex; flex-direction:column; gap:3px; margin-top:10px}
+.rack-row{height:16px; display:flex; align-items:center; border-bottom:1px solid var(--rule-soft); line-height:0}
+.rack-row.empty::after{content:""; flex:1; border-top:1px dotted var(--rule); opacity:.5}
+.shelf{display:flex; flex-wrap:wrap; gap:8px; align-content:flex-start; min-height:76px}
+.bundle{border:1px solid var(--rule); border-left:3px solid var(--bronze); background:var(--plate-2);
+  padding:6px 8px 5px; display:flex; flex-direction:column; gap:3px}
+.bundle.tying{animation:pop .3s ease-out}
+@keyframes pop{from{transform:scale(.7); opacity:0}to{transform:none; opacity:1}}
+.bundle .rows{display:flex; flex-direction:column; gap:2px; line-height:0; position:relative}
+.tie{position:absolute; top:0; left:63%; height:100%; width:4px; border-radius:1px;
+  background:var(--bronze); opacity:.85; pointer-events:none}
+.bundle.tying .tie{animation:wrap .5s ease-out backwards}
+.bundle.tying .rows{animation:cinch .8s ease-out}
+@keyframes wrap{from{height:0; opacity:0}40%{opacity:.95}to{height:100%; opacity:.85}}
+@keyframes cinch{0%,50%{transform:none}70%{transform:scaleX(.955)}100%{transform:none}}
+.bundle .cap{font-family:"IBM Plex Mono",monospace; font-size:.58rem; color:var(--ink-3)}
+.tabfoot{display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap;
+  padding:11px 16px; border-top:1px solid var(--rule-soft)}
+.prog{font-family:"IBM Plex Mono",monospace; font-size:.72rem; color:var(--ink-2)}
+.nudge{font-size:.78rem; color:var(--accent); font-weight:600; background:none; border:none; padding:0}
+
+/* ── cells ──────────────────────────────────────────────── */
+.cellstrip{display:grid; grid-template-columns:repeat(3,minmax(232px,1fr)); gap:15px; padding:15px; background:var(--sunk); overflow-x:auto}
+@media (max-width:760px){.cellstrip{grid-template-columns:1fr; overflow-x:visible}}
+.cellcol{background:var(--plate); border:2px solid var(--rule); padding:12px 13px 14px; display:flex; flex-direction:column; gap:9px}
+.cellcol.done{background:var(--plate-2)}
+.cellcol h4{font-size:.8rem; display:flex; align-items:center; gap:7px}
+.cellcol h4 .dot{width:9px; height:9px; border-radius:50%; background:var(--ink-3)}
+.cellcol.done h4 .dot{background:var(--accent)}
+.cellhd{display:flex; justify-content:space-between; align-items:center; gap:8px}
+.pours{display:flex; flex-direction:column; gap:5px}
+.pours .btn{width:100%; text-align:left; font-size:.71rem; padding:6px 9px}
+.cellstock{display:flex; flex-direction:column; gap:5px; min-height:44px}
+.stockrow{display:flex; gap:3px; flex-wrap:wrap; line-height:0; min-height:20px}
+.cellslots{display:flex; gap:7px; justify-content:center}
+.cellslot{width:54px; height:36px; border:1px dashed var(--rule); background:var(--plate-2); display:grid; place-items:center}
+.cellslot.full{border-style:solid; border-color:var(--rule-soft); background:transparent}
+.cellrack{display:flex; flex-direction:column; gap:2px}
+.cellrack .rack-row{height:13px}
+.cellmsg{font-size:.685rem; color:var(--ink-3); line-height:1.45; min-height:30px}
+.cellout{border-top:1px solid var(--rule-soft); padding-top:8px; min-height:38px; display:flex; align-items:center; justify-content:center}
+
+/* ── evidence ───────────────────────────────────────────── */
+.compare{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--rule-soft)}
+@media (max-width:820px){.compare{grid-template-columns:1fr}}
+.side{background:var(--plate); padding:14px 16px 16px}
+.side h4{font-size:.84rem}
+.side .sub{font-size:.72rem; color:var(--ink-3); margin:2px 0 12px}
+.bgrid{display:flex; gap:6px; overflow-x:auto; padding-bottom:4px}
+.bcol{display:flex; flex-direction:column; gap:3px}
+.bcol .lbl{display:flex; align-items:center; justify-content:center; gap:5px; margin-top:2px;
+  font-family:"IBM Plex Mono",monospace; font-size:.625rem; color:var(--ink-2); letter-spacing:.02em}
+.bcol .lbl svg{display:block; flex:none}
+.bcell{width:44px; height:38px; display:flex; flex-direction:column; border:1px solid var(--rule-soft)}
+.bcell span{flex:1; display:grid; place-items:center; font-family:"IBM Plex Mono",monospace; font-size:.55rem;
+  color:rgba(255,255,255,.94); text-shadow:0 0 2px rgba(0,0,0,.5)}
+.gridkey{font-size:.7rem; color:var(--ink-3); margin-top:9px}
+.empty-note{padding:24px 6px; text-align:center; color:var(--ink-3); font-size:.8rem}
+.charts{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--rule-soft); border-top:1px solid var(--rule-soft)}
+@media (max-width:820px){.charts{grid-template-columns:1fr}}
+.chartcell{background:var(--plate); padding:14px 16px 10px}
+.chartcell svg{display:block; width:100%; height:auto}
+.symkey{display:flex; flex-wrap:wrap; gap:10px 28px; align-items:center; padding:14px 16px;
+  border-top:1px solid var(--rule-soft); background:var(--sunk);
+  font-size:.86rem; font-weight:600; color:var(--ink-2)}
+.symkey span{display:flex; align-items:center; gap:8px}
+.symkey svg{display:block; flex:none}
+.symkey .note-inline{font-weight:400; color:var(--ink-3); font-size:.78rem}
+.predict{padding:15px 16px 17px; font-family:Newsreader,Georgia,serif; font-size:1.08rem;
+  line-height:1.5; color:var(--ink-2); max-width:62ch}
+footer.cite{border-top:1px solid var(--rule); margin-top:36px; padding-top:20px}
+footer.cite p{font-family:Newsreader,Georgia,serif; font-size:.86rem; line-height:1.6; color:var(--ink-2); max-width:70ch}
+footer.cite em{font-style:italic; color:var(--ink)}
+.note{font-family:Archivo,sans-serif; font-size:.71rem; color:var(--ink-3); margin-top:10px; max-width:72ch; line-height:1.6}
+@media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+.ghost{position:fixed; z-index:99; pointer-events:none; opacity:.92; transform:translate(-50%,-50%)}
+</style>
+</head>
+<body>
+<header class="mast">
+  <div class="mast-in">
+    <h1>Arrow-making simulator</h1>
+    <p class="credit"><b>After Martinón-Torres et&nbsp;al. 2014</b></p>
+  </div>
+  <nav class="steps" id="steps">
+    <button class="step" data-p="1" aria-current="true"><span class="n">01</span>Flow line<span class="tick" id="tick1"></span></button>
+    <button class="step" data-p="2"><span class="n">02</span>Cellular<span class="tick" id="tick2"></span></button>
+    <button class="step" data-p="3"><span class="n">03</span>Arrow chemistry</button>
+  </nav>
+</header>
+
+<div class="wrap">
+
+<!-- ══ 01 FLOW LINE ══════════════════════════════════════ -->
+<section class="phase on" id="p1">
+  <p class="task"><b>Your task</b>Pour a melt in each of the six workshops. Send every finished tray down
+    into the stock bin, then click pieces out of the bin to build fifteen arrows and tie three bundles.</p>
+
+  <div class="plate">
+    <div class="plate-hd"><h3>Plate 01 · Flow line</h3><span class="eyebrow">one task per unit · parts meet at the end</span></div>
+    <div class="key" id="key1"></div>
+
+    <div class="castwrap" id="castArea"></div>
+
+    <div class="flowarrow">↓ &nbsp; click or drag each tray into the store &nbsp; ↓</div>
+
+    <div class="bin">
+      <div class="bin-hd"><h4 style="font-size:.8rem">3 · Stock bin</h4>
+        <span class="hint" id="binNote">Nothing in store yet.</span></div>
+      <div class="bin-cols">
+        <div class="bin-col" id="binH" data-kind="head"><span class="eyebrow">Heads in store</span>
+          <div class="pile" id="pileH"></div></div>
+        <div class="bin-col" id="binT" data-kind="tang"><span class="eyebrow">Tangs in store</span>
+          <div class="pile" id="pileT"></div></div>
+      </div>
+    </div>
+
+    <div class="asm" id="asm">
+      <div>
+        <h4 style="font-size:.8rem">4 · Assembly &amp; bundling</h4>
+        <p class="hint" style="margin-top:3px" id="asmNote">Click a piece in the bin to place it in the jig.</p>
+        <div class="jig">
+          <div class="slot" id="slotH"><span class="lab">head</span></div>
+          <div class="slot" id="slotT"><span class="lab">tang</span></div>
+        </div>
+        <p class="eyebrow" style="margin-top:8px">Rack — <span id="rackN">0</span>/5 arrows</p>
+        <div class="rack" id="rackL"></div>
+      </div>
+      <div>
+        <p class="eyebrow" style="margin-bottom:9px">Bundles tied <span id="bundN">0</span>/3</p>
+        <div class="shelf" id="shelfL"><span class="hint">No bundles yet.</span></div>
+      </div>
+    </div>
+
+    <div class="tabfoot">
+      <span class="prog" id="progL">0 of 3 bundles tied</span>
+      <span style="display:flex; gap:12px; align-items:center">
+        <button class="nudge" id="nudgeL" hidden>Try cellular production →</button>
+        <button class="btn ghostbtn" id="resetL">Start over</button></span>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 02 CELLULAR ═══════════════════════════════════════ -->
+<section class="phase" id="p2">
+  <p class="task"><b>Your task</b>Work each cell in turn: pour its heads, pour its tangs, click them into
+    that cell's own jig, and tie its bundle.</p>
+
+  <div class="plate">
+    <div class="plate-hd"><h3>Plate 02 · Cellular</h3><span class="eyebrow">whole arrows · finish before you pour again</span></div>
+    <div class="key" id="key2"></div>
+    <div class="cellstrip" id="cellstrip"></div>
+    <div class="tabfoot">
+      <span class="prog" id="progC">0 of 3 bundles tied</span>
+      <span style="display:flex; gap:12px; align-items:center">
+        <button class="nudge" id="nudgeC" hidden>Examine arrow chemistry →</button>
+        <button class="btn ghostbtn" id="resetC">Start over</button></span>
+    </div>
+  </div>
+
+  <div class="plate" style="margin-top:18px">
+    <div class="plate-hd"><h3>Before you look</h3></div>
+    <p class="predict">What would be the chemical compositional differences between arrows from the
+      two models?</p>
+  </div>
+</section>
+
+<!-- ══ 03 EVIDENCE ═══════════════════════════════════════ -->
+<section class="phase" id="p3">
+  <div class="plate">
+    <div class="plate-hd"><h3>Plate 03 · The two records</h3></div>
+    <div class="key" id="key3"></div>
+    <div class="compare">
+      <div class="side">
+        <h4>Flow line</h4><p class="sub" id="subL">not run yet</p>
+        <div id="gridL"><p class="empty-note">Tie three bundles on the flow line.</p></div>
+        <p class="gridkey">One column per bundle · upper half of a block is the head, lower half the tang</p>
+      </div>
+      <div class="side">
+        <h4>Cellular</h4><p class="sub" id="subC">not run yet</p>
+        <div id="gridC"><p class="empty-note">Tie three bundles in the cells.</p></div>
+        <p class="gridkey">One column per bundle · upper half of a block is the head, lower half the tang</p>
+      </div>
+    </div>
+    <div class="symkey">
+      <span><svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true"><circle cx="9" cy="9" r="6.8" fill="var(--b1)" stroke="var(--stroke)" stroke-width=".9"/></svg> Bundle 1</span>
+      <span><svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true"><rect x="2.6" y="2.6" width="12.8" height="12.8" fill="var(--b2)" stroke="var(--stroke)" stroke-width=".9"/></svg> Bundle 2</span>
+      <span><svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true"><path d="M9 1.1 L16.9 9 L9 16.9 L1.1 9 Z" fill="var(--b3)" stroke="var(--stroke)" stroke-width=".9" stroke-linejoin="round"/></svg> Bundle 3</span>
+      <span class="note-inline">each point is the chemistry of one head or tang in that bundle</span>
+    </div>
+    <div class="charts">
+      <div class="chartcell" id="chartLH"></div>
+      <div class="chartcell" id="chartCH"></div>
+      <div class="chartcell" id="chartLT"></div>
+      <div class="chartcell" id="chartCT"></div>
+    </div>
+  </div>
+</section>
+
+<footer class="cite">
+  <p class="eyebrow">Source</p>
+  <p style="margin-top:7px">Martinón-Torres, M., Li, X.&nbsp;J., Bevan, A., Xia, Y., Zhao, K. &amp; Rehren, Th.
+    “Forty Thousand Arms for a Single Emperor: From Chemical Data to the Labor Organization Behind the Bronze
+    Arrows of the Terracotta Army.” <em>Journal of Archaeological Method and Theory</em> 21 (2014): 534–562.
+    doi:10.1007/s10816-012-9158-z</p>
+  <p class="note"><b style="color:var(--ink-2)">Note.</b> Crucible loads are separated here by tin and lead
+    plotted against each other, as in the study. The real analyses draw further support from minor elements
+    such as antimony and arsenic, and because unprepared, corroded surfaces had to be measured, the published
+    values are read as trends rather than absolute weight percentages.</p>
+  <p class="note">Scale is compressed throughout. The numbers are cut down so a class can work both systems
+    in a few minutes.</p>
+</footer>
+</div>
+
+<script>
+/* ═══ melts — one crucible load each, shared by both systems ═══ */
+const HEADS=[
+  {id:"H1",c:"#3F8E7E",sn:20.6,pb:1.5},
+  {id:"H2",c:"#5C86C4",sn:18.4,pb:6.8},
+  {id:"H3",c:"#7CA83F",sn:22.1,pb:3.6}];
+const TANGS=[
+  {id:"T1",c:"#C08A3E",sn:11.8,pb:4.2},
+  {id:"T2",c:"#A65A38",sn:9.7, pb:7.6},
+  {id:"T3",c:"#CBA63C",sn:13.2,pb:2.0}];
+const SYM=["circle","square","diamond"];
+const BCOL=["var(--b1)","var(--b2)","var(--b3)"];
+/* the badge that ties a bundle in the grid to the same bundle in the plots */
+function glyph(i,s=12){
+  const c=BCOL[i%BCOL.length], o=`fill="${c}" stroke="var(--stroke)" stroke-width=".9"`;
+  const body=SYM[i%SYM.length]==="circle" ? `<circle cx="6" cy="6" r="4.7" ${o}/>`
+    : SYM[i%SYM.length]==="square" ? `<rect x="1.5" y="1.5" width="9" height="9" ${o}/>`
+    : `<path d="M6 .7 L11.3 6 L6 11.3 L.7 6 Z" ${o} stroke-linejoin="round"/>`;
+  return `<svg viewBox="0 0 12 12" width="${s}" height="${s}" aria-hidden="true">${body}</svg>`;
+}
+const PER=5, MELTS=3;
+const CELLNAME=["Cell 1","Cell 2","Cell 3"], SHOP=["A","B","C"];
+const CRUCIBLE=`<div class="furnace"><svg class="crucible" viewBox="0 0 36 28" width="26" height="20" aria-hidden="true">
+  <path d="M7 6 H29 L25.5 19 Q24.5 22 21.5 22 H14.5 Q11.5 22 10.5 19 Z" fill="var(--plate-2)" stroke="var(--ink-2)" stroke-width="1.3" stroke-linejoin="round"/>
+  <path d="M7 6 H2.5" stroke="var(--ink-2)" stroke-width="1.7" stroke-linecap="round"/>
+  <ellipse cx="18" cy="6" rx="11" ry="2.6" fill="var(--bronze)" stroke="var(--ink-2)" stroke-width="1"/>
+  </svg><span class="stream"></span></div>`;
+const REDUCED=matchMedia("(prefers-reduced-motion:reduce)").matches;
+const randn=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
+const cvar=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let uid=0;
+const mkPieces=(melt,kind)=>Array.from({length:PER},()=>({uid:++uid,kind,melt,
+  sn:melt.sn+randn()*0.30, pb:Math.max(.1,melt.pb+randn()*0.28)}));
+const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+
+/* ═══ shapes ═══ */
+const tri=(fill,w=15)=>`<svg viewBox="0 0 16 22" width="${w}" height="${(w*1.375).toFixed(1)}" aria-hidden="true">
+  <path d="M8 1 L15 20 L8 17 L1 20 Z" fill="${fill}" stroke="var(--stroke)" stroke-width=".9" stroke-linejoin="round"/></svg>`;
+const rod=(fill,w=26)=>`<svg viewBox="0 0 34 10" width="${w}" height="${(w*.294).toFixed(1)}" aria-hidden="true">
+  <path d="M2 3.4 L28 4.2 L33 5 L28 5.8 L2 6.6 Z" fill="${fill}" stroke="var(--stroke)" stroke-width=".8" stroke-linejoin="round"/></svg>`;
+const shape=(kind,fill,w)=>kind==="head"?tri(fill,w||15):rod(fill,w||26);
+const arrowRow=(h,t,w=112)=>`<svg viewBox="0 0 132 16" width="${w}" height="${(w*.121).toFixed(1)}" aria-hidden="true">
+  <path d="M40 6.2 L120 7 L129 8 L120 9 L40 9.8 Z" fill="${t}" stroke="var(--stroke)" stroke-width=".8" stroke-linejoin="round"/>
+  <path d="M2 8 L38 1 L34 8 L38 15 Z" fill="${h}" stroke="var(--stroke)" stroke-width=".9" stroke-linejoin="round"/></svg>`;
+
+/* ═══ melt key — colour stands for chemistry ═══ */
+function keyHTML(){
+  const set=(label,arr)=>`<span class="set"><span class="eyebrow">${label}</span>`+
+    arr.map(m=>`<span class="chip"><i style="background:${m.c}"></i>
+      <span class="mono"><b>${m.id}</b> &nbsp;Sn ${m.sn.toFixed(1)}% · Pb ${m.pb.toFixed(1)}%</span></span>`).join("")+`</span>`;
+  return `<p class="caption"><b>Colour = chemistry.</b> Each colour is one crucible load, with its own tin
+    and lead recipe.</p>`+
+    set("Head melts",HEADS)+set("Tang melts",TANGS);
+}
+["key1","key2","key3"].forEach(id=>{document.getElementById(id).innerHTML=keyHTML()});
+
+/* ═══ nav ═══ */
+document.getElementById("steps").addEventListener("click",e=>{
+  const b=e.target.closest(".step"); if(b)go(b.dataset.p);
+});
+function go(p){
+  document.querySelectorAll(".step").forEach(s=>s.setAttribute("aria-current",String(s.dataset.p===String(p))));
+  document.querySelectorAll(".phase").forEach(s=>s.classList.toggle("on",s.id==="p"+p));
+  if(p==="3")renderEvidence();
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+/* ═══ pointer drag (trays only) ═══ */
+let drag=null;
+function dragify(el,payload,ghostHTML,onTap){
+  el.addEventListener("pointerdown",e=>{e.preventDefault();
+    drag={payload,ghostHTML,x0:e.clientX,y0:e.clientY,ghost:null,onTap}});
+}
+document.addEventListener("pointermove",e=>{
+  if(!drag)return;
+  if(!drag.ghost&&Math.hypot(e.clientX-drag.x0,e.clientY-drag.y0)>5){
+    const g=document.createElement("div"); g.className="ghost"; g.innerHTML=drag.ghostHTML;
+    document.body.appendChild(g); drag.ghost=g;
+  }
+  if(!drag.ghost)return;
+  drag.ghost.style.left=e.clientX+"px"; drag.ghost.style.top=e.clientY+"px";
+  document.querySelectorAll(".over").forEach(n=>n.classList.remove("over"));
+  const t=dropTarget(e.clientX,e.clientY,drag.payload);
+  if(t)t.classList.add("over");
+});
+document.addEventListener("pointerup",e=>{
+  if(!drag)return; const d=drag; drag=null;
+  document.querySelectorAll(".over").forEach(n=>n.classList.remove("over"));
+  if(!d.ghost){d.onTap&&d.onTap();return}
+  d.ghost.remove();
+  const t=dropTarget(e.clientX,e.clientY,d.payload);
+  if(t)t.dispatchEvent(new CustomEvent("dropped",{detail:d.payload}));
+  else d.onTap&&d.onTap();
+});
+function dropTarget(x,y,payload){
+  for(const el of document.querySelectorAll("[data-drop]")){
+    if(el.dataset.kind&&el.dataset.kind!==payload.kind)continue;
+    const r=el.getBoundingClientRect();
+    if(x>r.left-22&&x<r.right+22&&y>r.top-22&&y<r.bottom+22)return el;
+  }
+  return null;
+}
+
+/* ═══ 01 · FLOW LINE ═══ */
+let L;
+const freshL=()=>({poured:{head:[false,false,false],tang:[false,false,false]},
+  busy:{head:[false,false,false],tang:[false,false,false]},trays:[],
+  bin:{head:[],tang:[]},jig:{head:null,tang:null},rack:[],bundles:[]});
+function pour(kind,i){
+  if(L.poured[kind][i]||L.busy[kind][i])return;
+  const melt=(kind==="head"?HEADS:TANGS)[i];
+  const add=()=>{
+    L.busy[kind][i]=false; L.poured[kind][i]=true;
+    L.trays.push({tid:"tr"+(++uid),kind,shop:i,melt,pieces:mkPieces(melt,kind),fresh:!REDUCED});
+    renderL();
+  };
+  if(REDUCED){add();return}
+  L.busy[kind][i]=true; renderL();   /* the .pouring class rides in with this render */
+  setTimeout(add,620);
+}
+function trayToBin(tid){
+  const i=L.trays.findIndex(t=>t.tid===tid); if(i<0)return;
+  const tr=L.trays.splice(i,1)[0];
+  L.bin[tr.kind].push(...tr.pieces); shuffle(L.bin[tr.kind]); renderL();
+}
+function binToJig(kind,pieceUid){
+  if(L.jig[kind])return;
+  const pile=L.bin[kind], i=pile.findIndex(p=>p.uid===pieceUid); if(i<0)return;
+  L.jig[kind]=pile.splice(i,1)[0]; renderL();
+  if(L.jig.head&&L.jig.tang)setTimeout(bindL,REDUCED?0:320);
+}
+function bindL(){
+  if(!L.jig.head||!L.jig.tang)return;
+  L.rack.push({head:L.jig.head,tang:L.jig.tang});
+  L.jig={head:null,tang:null};
+  if(L.rack.length===PER){L.bundles.push({arrows:L.rack,fresh:!REDUCED}); L.rack=[]}
+  renderL();
+}
+function renderL(){
+  /* assembly stays shut until every workshop has poured and every tray is in the store */
+  const toPour=["head","tang"].reduce((n,k)=>n+L.poured[k].filter(p=>!p).length,0);
+  const ready=toPour===0&&L.trays.length===0;
+
+  const area=document.getElementById("castArea");
+  area.innerHTML=["head","tang"].map(kind=>{
+    const melts=kind==="head"?HEADS:TANGS, Noun=kind==="head"?"Head":"Tang", noun=kind==="head"?"heads":"tangs";
+    return `<div class="castgroup">
+      <p class="grouphd">${Noun} casting<span class="ghint">three workshops, one crucible load each</span></p>
+      <div class="castrow">${melts.map((m,i)=>{
+        const poured=L.poured[kind][i], busy=L.busy[kind][i];
+        const held=L.trays.some(t=>t.kind===kind&&t.shop===i);
+        return `<div class="unit${busy?" pouring":""}" data-kind="${kind}" data-shop="${i}">
+          <div class="unit-hd"><h4>${Noun} workshop ${SHOP[i]}</h4>${CRUCIBLE}</div>
+          <button class="btn pour"${poured||busy?" disabled":""}>${poured?"Crucible emptied":"Pour a melt"}</button>
+          <div class="trays">${held?"":`<span class="tray-empty">${
+            poured?"Sent to the store.":`One pour fills five ${noun}.`}</span>`}</div>
+        </div>`}).join("")}</div></div>`;
+  }).join("");
+
+  area.querySelectorAll(".unit").forEach(u=>{
+    const kind=u.dataset.kind, i=+u.dataset.shop;
+    u.querySelector("button").onclick=()=>pour(kind,i);
+    const tr=L.trays.find(t=>t.kind===kind&&t.shop===i);
+    if(!tr)return;
+    const el=document.createElement("div");
+    el.className="tray-card"+(tr.fresh?" fresh":""); el.tabIndex=0; el.setAttribute("role","button");
+    el.setAttribute("aria-label",`Tray of five ${kind}s, melt ${tr.melt.id}, ${tr.melt.sn.toFixed(1)} per cent tin. Send to the stock bin.`);
+    el.innerHTML=`<span class="pcs">${Array(PER).fill(shape(kind,tr.melt.c)).join("")}</span>
+      <span class="code">${tr.melt.id} · Sn ${tr.melt.sn.toFixed(1)}%</span>`;
+    tr.fresh=false;
+    dragify(el,{type:"tray",tid:tr.tid,kind},`<div class="tray-card">${el.innerHTML}</div>`,()=>trayToBin(tr.tid));
+    el.addEventListener("keydown",ev=>{if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();trayToBin(tr.tid)}});
+    u.querySelector(".trays").appendChild(el);
+  });
+
+  const nH=L.bin.head.length,nT=L.bin.tang.length;
+  document.getElementById("binNote").textContent=(nH||nT)
+    ? `${nH} heads, ${nT} tangs in store. The bin does not remember which melt is which — take what comes to hand.`
+    : "Nothing in store yet. Click or drag a finished tray down from a casting unit.";
+  [["head","pileH"],["tang","pileT"]].forEach(([kind,id])=>{
+    const box=document.getElementById(id); box.innerHTML="";
+    L.bin[kind].forEach(p=>{
+      const el=document.createElement("button");
+      el.className="fd"; el.type="button"; el.disabled=!ready;
+      el.setAttribute("aria-label",ready
+        ?`Unknown ${kind} from the bin. Click to place in the jig.`
+        :`Unknown ${kind}. Assembly opens once all the metal is cast and in the store.`);
+      el.innerHTML=shape(kind,"var(--covered)");
+      el.onclick=()=>binToJig(kind,p.uid);
+      box.appendChild(el);
+    });
+  });
+
+  [["head","slotH"],["tang","slotT"]].forEach(([kind,id])=>{
+    const s=document.getElementById(id), p=L.jig[kind];
+    s.classList.toggle("full",!!p);
+    s.querySelectorAll(".bound").forEach(n=>n.remove());
+    if(p)s.insertAdjacentHTML("beforeend",
+      `<div class="bound">${shape(kind,p.melt.c,kind==="head"?26:46)}</div>`);
+  });
+  document.getElementById("asm").classList.toggle("locked",!ready);
+  document.getElementById("asmNote").textContent = !ready
+      ? (toPour>0
+          ? `Closed until the casting is done — ${toPour} melt${toPour>1?"s":""} still to pour.`
+          : `Closed until the store has everything — ${L.trays.length} tray${L.trays.length>1?"s":""} still on the casting bench.`)
+      : (L.jig.head&&L.jig.tang) ? "Binding…"
+      : (L.jig.head||L.jig.tang) ? "One more piece — click the other part in the bin."
+      : "Click a piece in the bin to place it in the jig. You cannot see its melt until it lands.";
+
+  const rack=document.getElementById("rackL"); rack.innerHTML="";
+  for(let i=0;i<PER;i++){
+    const a=L.rack[i], row=document.createElement("div");
+    row.className="rack-row"+(a?"":" empty");
+    if(a)row.innerHTML=arrowRow(a.head.melt.c,a.tang.melt.c);
+    rack.appendChild(row);
+  }
+  document.getElementById("rackN").textContent=L.rack.length;
+  document.getElementById("bundN").textContent=L.bundles.length;
+
+  const shelf=document.getElementById("shelfL");
+  shelf.innerHTML=L.bundles.length?"":'<span class="hint">No bundles yet.</span>';
+  L.bundles.forEach((b,i)=>{
+    shelf.insertAdjacentHTML("beforeend",`<div class="bundle${b.fresh?" tying":""}">
+      <span class="rows">${b.arrows.map(a=>arrowRow(a.head.melt.c,a.tang.melt.c,94)).join("")}<i class="tie"></i></span>
+      <span class="cap">Bundle ${i+1}</span></div>`);
+    b.fresh=false;
+  });
+
+  const done=L.bundles.length>=MELTS;
+  document.getElementById("progL").textContent=`${L.bundles.length} of ${MELTS} bundles tied`;
+  document.getElementById("nudgeL").hidden=!done;
+  document.getElementById("tick1").textContent=done?"✓":"";
+}
+document.getElementById("resetL").onclick=()=>{L=freshL();renderL()};
+document.getElementById("nudgeL").onclick=()=>go("2");
+[["binH","head"],["binT","tang"]].forEach(([id,kind])=>{
+  const el=document.getElementById(id);
+  el.dataset.drop="1"; el.dataset.kind=kind;
+  el.addEventListener("dropped",e=>trayToBin(e.detail.tid));
+});
+
+/* ═══ 02 · CELLULAR ═══ */
+let C;
+const freshC=()=>({cells:Array.from({length:MELTS},(_,i)=>({
+  i,headMelt:null,tangMelt:null,busy:false,fresh:null,
+  heads:[],tangs:[],jig:{head:null,tang:null},rack:[],bundle:null}))});
+function pourCell(i,kind){
+  const c=C.cells[i];
+  if(c.busy||c.bundle)return;
+  if(kind==="head"&&c.headMelt)return;
+  if(kind==="tang"&&c.tangMelt)return;
+  const melt=(kind==="head"?HEADS:TANGS)[i];
+  const add=()=>{
+    if(kind==="head"){c.headMelt=melt; c.heads=mkPieces(melt,"head")}
+    else{c.tangMelt=melt; c.tangs=mkPieces(melt,"tang")}
+    c.busy=false; c.fresh=REDUCED?null:kind; renderC();
+  };
+  if(REDUCED){add();return}
+  c.busy=true; renderC();
+  document.querySelector(`.cellcol[data-c="${i}"]`)?.classList.add("pouring");
+  setTimeout(add,620);
+}
+function cellToJig(i,kind,pieceUid){
+  const c=C.cells[i]; if(c.jig[kind])return;
+  const arr=kind==="head"?c.heads:c.tangs;
+  const k=arr.findIndex(p=>p.uid===pieceUid); if(k<0)return;
+  c.jig[kind]=arr.splice(k,1)[0]; renderC();
+  if(c.jig.head&&c.jig.tang)setTimeout(()=>bindC(i),REDUCED?0:320);
+}
+function bindC(i){
+  const c=C.cells[i]; if(!c.jig.head||!c.jig.tang)return;
+  c.rack.push({head:c.jig.head,tang:c.jig.tang});
+  c.jig={head:null,tang:null};
+  if(c.rack.length===PER){c.bundle={arrows:c.rack,fresh:!REDUCED}; c.rack=[]}
+  renderC();
+}
+function renderC(){
+  const strip=document.getElementById("cellstrip"); strip.innerHTML="";
+  C.cells.forEach(c=>{
+    const col=document.createElement("div");
+    col.className="cellcol"+(c.bundle?" done":""); col.dataset.c=c.i;
+    const locked=!!c.bundle;
+    let msg;
+    if(locked)msg="Bundle tied. This cell is finished.";
+    else if(!c.headMelt)msg="Pour the heads for this batch.";
+    else if(!c.tangMelt)msg=`${c.headMelt.id} cast. Now pour the tangs for this batch.`;
+    else if(c.rack.length||c.jig.head||c.jig.tang)msg=`${c.rack.length} of ${PER} joined. Nothing leaves this cell until the bundle is tied.`;
+    else msg="Click a head and a tang into the jig.";
+
+    col.innerHTML=`
+      <div class="cellhd">
+        <h4><span class="dot"></span>${CELLNAME[c.i]}</h4>
+        ${CRUCIBLE}
+      </div>
+      <div class="pours">
+        <button class="btn" data-pour="head" ${c.headMelt||locked||c.busy?"disabled":""}>
+          ${c.headMelt?`Heads cast · ${c.headMelt.id}`:"Pour head melt"}</button>
+        <button class="btn" data-pour="tang" ${c.tangMelt||locked||c.busy?"disabled":""}>
+          ${c.tangMelt?`Tangs cast · ${c.tangMelt.id}`:"Pour tang melt"}</button>
+      </div>
+      <div class="cellstock">
+        <div class="stockrow" data-row="head"></div>
+        <div class="stockrow" data-row="tang"></div>
+      </div>
+      <div class="cellslots">
+        <div class="cellslot" data-slot="head"></div>
+        <div class="cellslot" data-slot="tang"></div>
+      </div>
+      <div class="cellrack"></div>
+      <p class="cellmsg">${msg}</p>
+      <div class="cellout"></div>`;
+
+    col.querySelectorAll("[data-pour]").forEach(b=>b.onclick=()=>pourCell(c.i,b.dataset.pour));
+
+    [["head",c.heads],["tang",c.tangs]].forEach(([kind,arr])=>{
+      const row=col.querySelector(`[data-row="${kind}"]`);
+      if(c.fresh===kind)row.classList.add("fresh");
+      arr.forEach(p=>{
+        const el=document.createElement("button");
+        el.className="fd"; el.type="button";
+        el.setAttribute("aria-label",`${kind} from melt ${p.melt.id}, ${p.melt.sn.toFixed(1)} per cent tin. Click to place in this cell's jig.`);
+        el.innerHTML=shape(kind,p.melt.c);
+        el.onclick=()=>cellToJig(c.i,kind,p.uid);
+        row.appendChild(el);
+      });
+    });
+    c.fresh=null;
+
+    ["head","tang"].forEach(kind=>{
+      const s=col.querySelector(`[data-slot="${kind}"]`), p=c.jig[kind];
+      if(p){s.classList.add("full"); s.innerHTML=`<span class="bound">${shape(kind,p.melt.c,kind==="head"?20:38)}</span>`}
+    });
+
+    const rk=col.querySelector(".cellrack");
+    for(let i=0;i<PER;i++){
+      const a=c.rack[i], row=document.createElement("div");
+      row.className="rack-row"+(a?"":" empty");
+      if(a)row.innerHTML=arrowRow(a.head.melt.c,a.tang.melt.c,94);
+      rk.appendChild(row);
+    }
+    if(c.bundle){
+      col.querySelector(".cellout").innerHTML=`<div class="bundle${c.bundle.fresh?" tying":""}">
+        <span class="rows">${c.bundle.arrows.map(a=>arrowRow(a.head.melt.c,a.tang.melt.c,88)).join("")}<i class="tie"></i></span>
+        <span class="cap">Bundle ${c.i+1}</span></div>`;
+      c.bundle.fresh=false;
+    }
+    strip.appendChild(col);
+  });
+  const done=C.cells.filter(c=>c.bundle).length;
+  document.getElementById("progC").textContent=`${done} of ${MELTS} bundles tied`;
+  document.getElementById("nudgeC").hidden=done<MELTS;
+  document.getElementById("tick2").textContent=done>=MELTS?"✓":"";
+}
+document.getElementById("resetC").onclick=()=>{C=freshC();renderC()};
+document.getElementById("nudgeC").onclick=()=>go("3");
+
+/* ═══ 03 · EVIDENCE ═══ */
+const bundlesOf=r=>r==="L"?L.bundles:C.cells.filter(c=>c.bundle).map(c=>c.bundle);
+function grid(bundles){
+  return `<div class="bgrid">`+bundles.map((b,i)=>`<div class="bcol">
+    ${b.arrows.map(a=>`<div class="bcell">
+      <span style="background:${a.head.melt.c}">${a.head.melt.id}</span>
+      <span style="background:${a.tang.melt.c}">${a.tang.melt.id}</span></div>`).join("")}
+    <span class="lbl">${glyph(i)}Bundle ${i+1}</span></div>`).join("")+`</div>`;
+}
+/* bivariate: x = tin %, y = lead %. Colour = crucible load, symbol = bundle. */
+function mark(sym,x,y,c,r){
+  const a=`fill="${c}" fill-opacity=".85" stroke="var(--stroke)" stroke-width=".8"`;
+  if(sym==="circle")return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" ${a}/>`;
+  if(sym==="square"){const h=r*.9;
+    return `<rect x="${(x-h).toFixed(1)}" y="${(y-h).toFixed(1)}" width="${(h*2).toFixed(1)}" height="${(h*2).toFixed(1)}" ${a}/>`}
+  const d=r*1.3;
+  return `<path d="M ${x.toFixed(1)} ${(y-d).toFixed(1)} L ${(x+d).toFixed(1)} ${y.toFixed(1)} L ${x.toFixed(1)} ${(y+d).toFixed(1)} L ${(x-d).toFixed(1)} ${y.toFixed(1)} Z" ${a} stroke-linejoin="round"/>`;
+}
+/* one panel = one part (head or tang) from one system.
+   position = crucible chemistry · colour and symbol = which bundle it ended up in */
+function panel(bundles,part,title){
+  const small=window.innerWidth<820;
+  const FS=small?13:10.5, R=small?6:5.2;
+  const W=360,H=small?298:286,pL=small?46:42,pR=14,pT=small?36:31,pB=small?50:44;
+  const head=part==="head";
+  const x0=head?16:8, x1=head?24:16, y0=0, y1=9;
+  const X=v=>pL+((v-x0)/(x1-x0))*(W-pL-pR);
+  const Y=v=>pT+(1-(v-y0)/(y1-y0))*(H-pT-pB);
+  const rule=cvar("--rule-soft"),ink3=cvar("--ink-3");
+  const mono=`font-family="IBM Plex Mono,monospace"`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${title}: lead against tin, coloured by bundle">`;
+  s+=`<text x="${pL-30}" y="${(pT-13).toFixed(1)}" ${mono} font-size="${FS+.5}" letter-spacing="1.1" fill="${ink3}">${title.toUpperCase()}</text>`;
+  for(let t=x0;t<=x1;t+=2)
+    s+=`<line x1="${X(t).toFixed(1)}" y1="${pT}" x2="${X(t).toFixed(1)}" y2="${(H-pB).toFixed(1)}" stroke="${rule}" stroke-width="1"/>`
+     +`<text x="${X(t).toFixed(1)}" y="${(H-pB+FS+5).toFixed(1)}" text-anchor="middle" ${mono} font-size="${FS}" fill="${ink3}">${t}</text>`;
+  for(let p=y0;p<=y1;p+=2)
+    s+=`<line x1="${pL}" y1="${Y(p).toFixed(1)}" x2="${(W-pR).toFixed(1)}" y2="${Y(p).toFixed(1)}" stroke="${rule}" stroke-width="1"/>`
+     +`<text x="${(pL-6).toFixed(1)}" y="${(Y(p)+FS*.36).toFixed(1)}" text-anchor="end" ${mono} font-size="${FS}" fill="${ink3}">${p}</text>`;
+  s+=`<text x="${((pL+W-pR)/2).toFixed(1)}" y="${(H-pB+FS*2+10).toFixed(1)}" text-anchor="middle" ${mono} font-size="${FS}" letter-spacing="1" fill="${ink3}">TIN, %</text>`
+   +`<text transform="translate(${(FS-1).toFixed(1)} ${(pT+(H-pT-pB)/2).toFixed(1)}) rotate(-90)" text-anchor="middle" ${mono} font-size="${FS}" letter-spacing="1" fill="${ink3}">LEAD, %</text>`;
+  bundles.forEach((b,i)=>{
+    const sym=SYM[i%SYM.length], col=BCOL[i%BCOL.length];
+    b.arrows.forEach(a=>{const p=a[part]; s+=mark(sym,X(p.sn),Y(p.pb),col,R)});
+  });
+  return s+"</svg>";
+}
+function renderEvidence(){
+  const bl=bundlesOf("L"), bc=bundlesOf("C");
+  document.getElementById("subL").textContent=bl.length?`${bl.length} bundles · ${bl.length*PER} arrows`:"not run yet";
+  document.getElementById("subC").textContent=bc.length?`${bc.length} bundles · ${bc.length*PER} arrows`:"not run yet";
+  document.getElementById("gridL").innerHTML=bl.length?grid(bl):'<p class="empty-note">Tie three bundles on the flow line.</p>';
+  document.getElementById("gridC").innerHTML=bc.length?grid(bc):'<p class="empty-note">Tie three bundles in the cells.</p>';
+  const put=(id,b,part,title)=>{document.getElementById(id).innerHTML=
+    b.length?panel(b,part,title):`<p class="empty-note">Not run yet.</p>`};
+  put("chartLH",bl,"head","Flow line · heads");
+  put("chartCH",bc,"head","Cellular · heads");
+  put("chartLT",bl,"tang","Flow line · tangs");
+  put("chartCT",bc,"tang","Cellular · tangs");
+}
+
+/* charts carry larger type on narrow screens, so redraw when the width crosses over */
+let wasSmall=window.innerWidth<820, rz;
+addEventListener("resize",()=>{
+  clearTimeout(rz);
+  rz=setTimeout(()=>{
+    const now=window.innerWidth<820;
+    if(now!==wasSmall){wasSmall=now; if(document.getElementById("p3").classList.contains("on"))renderEvidence()}
+  },180);
+});
+
+/* ═══ boot ═══ */
+L=freshL(); C=freshC(); renderL(); renderC(); renderEvidence();
+</script>
+</body>
+</html>
