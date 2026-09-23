@@ -4,10 +4,10 @@ A teaching activity on how craft production was organised in the Qin workshops t
 the Terracotta Army. Students cast bronze, assemble arrows and tie bundles under two
 organisational models, then read the chemical pattern each one leaves behind.
 
-After Martinón-Torres, M., Li, X. J., Bevan, A., Xia, Y., Zhao, K. & Rehren, Th.,
-“Forty Thousand Arms for a Single Emperor: From Chemical Data to the Labor Organization
-Behind the Bronze Arrows of the Terracotta Army,” *Journal of Archaeological Method and
-Theory* 21 (2014): 534–562. doi:10.1007/s10816-012-9158-z
+Martinón-Torres, M., Li, X. J., Bevan, A., Xia, Y., Zhao, K., & Rehren, T. (2014). Forty
+Thousand Arms for a Single Emperor: From Chemical Data to the Labor Organization Behind the
+Bronze Arrows of the Terracotta Army. *Journal of Archaeological Method and Theory, 21*(3),
+534–562. https://doi.org/10.1007/s10816-012-9158-z
 
 ## The activity
 
