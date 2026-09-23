@@ -585,7 +585,7 @@ function renderL(){
           : `Closed until the store has everything — ${L.trays.length} tray${L.trays.length>1?"s":""} still on the casting bench.`)
       : (L.jig.head&&L.jig.tang) ? "Binding…"
       : (L.jig.head||L.jig.tang) ? "One more piece — click the other part in the bin."
-      : "Click a piece in the bin to place it in the jig. You cannot see its melt until it lands.";
+      : "Click a piece in the bin to place it in the jig.";
 
   const rack=document.getElementById("rackL"); rack.innerHTML="";
   for(let i=0;i<PER;i++){
