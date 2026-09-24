@@ -114,15 +114,40 @@ nav.steps{max-width:1160px; margin:0 auto; padding:20px 20px 0; display:flex; ga
   display:flex; flex-direction:column; gap:8px}
 .unit-hd{display:flex; justify-content:space-between; align-items:center; gap:8px}
 .unit-hd h4{font-size:.78rem}
-.unit .btn.pour{width:100%; text-align:center; font-size:.73rem; padding:7px 8px}
-.furnace{position:relative; width:28px; height:23px; flex:none}
-.crucible{transform-origin:62% 70%; display:block}
-.stream{position:absolute; left:14px; top:16px; width:4px; height:0; border-radius:2px;
-  background:linear-gradient(#FFF0B4,#FFA23A,#DD4E16); opacity:0}
+.unit .btn{width:100%; text-align:center; font-size:.73rem; padding:7px 8px}
+.btn .sw{width:10px; height:10px; display:inline-block; border:1px solid var(--stroke);
+  margin-right:6px; vertical-align:-1px}
+.steps2{display:flex; flex-direction:column; gap:5px}
+.stepno{font-family:"IBM Plex Mono",monospace; font-size:.6rem; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--ink-3); margin-bottom:-2px}
+/* the crucible scene: three ingots go in, the pool comes out coloured */
+.charge{position:relative; height:66px; display:flex; align-items:flex-end; justify-content:center}
+.crucible{transform-origin:58% 72%; display:block; position:relative; z-index:2}
+.charge.hot .crucible{filter:drop-shadow(0 0 5px rgba(255,150,60,.55))}
+/* each ingot sits a fixed distance either side of centre, so the fall can converge on the pot */
+.ing{position:absolute; top:3px; left:50%; margin-left:-13px; --x:0px;
+  transform:translateX(var(--x));
+  font-family:"IBM Plex Mono",monospace; font-size:.585rem;
+  font-weight:600; padding:2px 5px; border:1px solid var(--stroke); border-radius:3px;
+  color:#15150F; line-height:1.2}
+.ing.cu{--x:-50px; background:#C07A42}
+.ing.sn{--x:0px;   background:#C6C9C4}
+.ing.pb{--x:50px;  background:#8A8F93}
+.charge.charged .ing,.charge.spent .ing{opacity:0; visibility:hidden}
+.charge.mixing .ing{animation:drop .58s ease-in forwards}
+.charge.mixing .ing.sn{animation-delay:.16s}
+.charge.mixing .ing.pb{animation-delay:.32s}
+@keyframes drop{
+  0%  {transform:translate(var(--x),0) scale(1); opacity:1}
+  55% {transform:translate(calc(var(--x)*.45),20px) scale(.85); opacity:1}
+  80% {transform:translate(calc(var(--x)*.12),31px) scale(.62); opacity:1}
+  100%{transform:translate(0,38px) scale(.18); opacity:0}}
+.stream{position:absolute; left:calc(50% - 9px); bottom:3px; width:4px; height:0; border-radius:2px;
+  background:linear-gradient(#FFF0B4,#FFA23A,#DD4E16); opacity:0; z-index:1}
 .pouring .crucible{animation:tip .95s ease-in-out}
 .pouring .stream{animation:flow .8s ease-out .16s}
 @keyframes tip{0%,100%{transform:rotate(0)}22%,72%{transform:rotate(-42deg)}}
-@keyframes flow{0%{height:0;opacity:0}14%{opacity:1}75%{height:30px;opacity:1}100%{height:30px;opacity:0}}
+@keyframes flow{0%{height:0;opacity:0}14%{opacity:1}75%{height:26px;opacity:1}100%{height:26px;opacity:0}}
 @keyframes cool{
   0%{filter:brightness(2.5) saturate(.3) sepia(1) hue-rotate(-24deg); box-shadow:0 0 15px 3px rgba(255,140,40,.7)}
   45%{filter:brightness(1.6) saturate(.65) sepia(.45) hue-rotate(-11deg); box-shadow:0 0 9px 1px rgba(255,150,60,.35)}
@@ -401,10 +426,13 @@ function glyph(i,s=12){
 }
 const PER=5, MELTS=3;
 const CELLNAME=["Cell 1","Cell 2","Cell 3"], SHOP=["A","B","C"];
-const CRUCIBLE=`<div class="furnace"><svg class="crucible" viewBox="0 0 36 28" width="26" height="20" aria-hidden="true">
-  <path d="M7 6 H29 L25.5 19 Q24.5 22 21.5 22 H14.5 Q11.5 22 10.5 19 Z" fill="var(--plate-2)" stroke="var(--ink-2)" stroke-width="1.3" stroke-linejoin="round"/>
-  <path d="M7 6 H2.5" stroke="var(--ink-2)" stroke-width="1.7" stroke-linecap="round"/>
-  <ellipse cx="18" cy="6" rx="11" ry="2.6" fill="var(--bronze)" stroke="var(--ink-2)" stroke-width="1"/>
+/* state: "idle" (ingots waiting) · "mixing" (they drop in) · "charged" (pool coloured) · "spent" (poured out) */
+const crucible=(state,pool)=>`<div class="charge ${state}${state==="charged"?" hot":""}">
+  <span class="ing cu">Cu</span><span class="ing sn">Sn</span><span class="ing pb">Pb</span>
+  <svg class="crucible" viewBox="0 0 36 28" width="36" height="28" aria-hidden="true">
+    <path d="M7 6 H29 L25.5 19 Q24.5 22 21.5 22 H14.5 Q11.5 22 10.5 19 Z" fill="var(--plate-2)" stroke="var(--ink-2)" stroke-width="1.3" stroke-linejoin="round"/>
+    <path d="M7 6 H2.5" stroke="var(--ink-2)" stroke-width="1.7" stroke-linecap="round"/>
+    <ellipse cx="18" cy="6" rx="11" ry="2.6" fill="${pool||"var(--rule)"}" stroke="var(--ink-2)" stroke-width="1"/>
   </svg><span class="stream"></span></div>`;
 const REDUCED=matchMedia("(prefers-reduced-motion:reduce)").matches;
 const randn=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();
@@ -485,11 +513,20 @@ function dropTarget(x,y,payload){
 
 /* ═══ 01 · FLOW LINE ═══ */
 let L;
-const freshL=()=>({poured:{head:[false,false,false],tang:[false,false,false]},
+const freshL=()=>({alloyed:{head:[false,false,false],tang:[false,false,false]},
+  mixing:{head:[false,false,false],tang:[false,false,false]},
+  poured:{head:[false,false,false],tang:[false,false,false]},
   busy:{head:[false,false,false],tang:[false,false,false]},trays:[],
   bin:{head:[],tang:[]},jig:{head:null,tang:null},rack:[],bundles:[]});
+function alloyL(kind,i){
+  if(L.alloyed[kind][i]||L.mixing[kind][i])return;
+  const done=()=>{L.mixing[kind][i]=false; L.alloyed[kind][i]=true; renderL()};
+  if(REDUCED){done();return}
+  L.mixing[kind][i]=true; renderL();
+  setTimeout(done,950);
+}
 function pour(kind,i){
-  if(L.poured[kind][i]||L.busy[kind][i])return;
+  if(!L.alloyed[kind][i]||L.poured[kind][i]||L.busy[kind][i])return;
   const melt=(kind==="head"?HEADS:TANGS)[i];
   const add=()=>{
     L.busy[kind][i]=false; L.poured[kind][i]=true;
@@ -527,21 +564,34 @@ function renderL(){
   area.innerHTML=["head","tang"].map(kind=>{
     const melts=kind==="head"?HEADS:TANGS, Noun=kind==="head"?"Head":"Tang", noun=kind==="head"?"heads":"tangs";
     return `<div class="castgroup">
-      <p class="grouphd">${Noun} casting<span class="ghint">three workshops, one crucible load each</span></p>
+      <p class="grouphd">${Noun} casting<span class="ghint">three workshops · alloy the bronze, then pour one crucible load each</span></p>
       <div class="castrow">${melts.map((m,i)=>{
+        const mixing=L.mixing[kind][i], alloyed=L.alloyed[kind][i];
         const poured=L.poured[kind][i], busy=L.busy[kind][i];
         const held=L.trays.some(t=>t.kind===kind&&t.shop===i);
+        const state=poured?"spent":alloyed?"charged":mixing?"mixing":"idle";
         return `<div class="unit${busy?" pouring":""}" data-kind="${kind}" data-shop="${i}">
-          <div class="unit-hd"><h4>${Noun} workshop ${SHOP[i]}</h4>${CRUCIBLE}</div>
-          <button class="btn pour"${poured||busy?" disabled":""}>${poured?"Crucible emptied":"Pour a melt"}</button>
+          <div class="unit-hd"><h4>${Noun} workshop ${SHOP[i]}</h4></div>
+          ${crucible(state,alloyed&&!poured?m.c:"")}
+          <div class="steps2">
+            <span class="stepno">1 · alloy</span>
+            <button class="btn" data-act="alloy"${alloyed||mixing?" disabled":""}>${
+              alloyed?`<i class="sw" style="background:${m.c}"></i>Sn ${m.sn.toFixed(1)}% · Pb ${m.pb.toFixed(1)}%`
+              : mixing?"Mixing…":"Melt copper, add tin &amp; lead"}</button>
+            <span class="stepno">2 · cast</span>
+            <button class="btn pour"${!alloyed||poured||busy?" disabled":""} data-act="pour">${
+              poured?"Crucible emptied":"Pour a melt"}</button>
+          </div>
           <div class="trays">${held?"":`<span class="tray-empty">${
-            poured?"Sent to the store.":`One pour fills five ${noun}.`}</span>`}</div>
+            poured?"Sent to the store.":alloyed?`One pour fills five ${noun}.`:"Alloy the metal first."}</span>`}</div>
         </div>`}).join("")}</div></div>`;
   }).join("");
 
   area.querySelectorAll(".unit").forEach(u=>{
     const kind=u.dataset.kind, i=+u.dataset.shop;
-    u.querySelector("button").onclick=()=>pour(kind,i);
+    u.querySelectorAll("[data-act]").forEach(b=>{
+      b.onclick=()=>b.dataset.act==="alloy"?alloyL(kind,i):pour(kind,i);
+    });
     const tr=L.trays.find(t=>t.kind===kind&&t.shop===i);
     if(!tr)return;
     const el=document.createElement("div");
@@ -625,10 +675,19 @@ document.getElementById("nudgeL").onclick=()=>go("2");
 let C;
 const freshC=()=>({cells:Array.from({length:MELTS},(_,i)=>({
   i,headMelt:null,tangMelt:null,busy:false,fresh:null,
+  alloy:{head:false,tang:false},mixing:null,
   heads:[],tangs:[],jig:{head:null,tang:null},rack:[],bundle:null}))});
+function alloyC(i,kind){
+  const c=C.cells[i];
+  if(c.alloy[kind]||c.mixing||c.busy||c.bundle)return;
+  const done=()=>{c.mixing=null; c.alloy[kind]=true; renderC()};
+  if(REDUCED){done();return}
+  c.mixing=kind; renderC();
+  setTimeout(done,950);
+}
 function pourCell(i,kind){
   const c=C.cells[i];
-  if(c.busy||c.bundle)return;
+  if(c.busy||c.bundle||c.mixing||!c.alloy[kind])return;
   if(kind==="head"&&c.headMelt)return;
   if(kind==="tang"&&c.tangMelt)return;
   const melt=(kind==="head"?HEADS:TANGS)[i];
@@ -662,22 +721,36 @@ function renderC(){
     const col=document.createElement("div");
     col.className="cellcol"+(c.bundle?" done":""); col.dataset.c=c.i;
     const locked=!!c.bundle;
+    const hM=HEADS[c.i], tM=TANGS[c.i];
     let msg;
     if(locked)msg="Bundle tied. This cell is finished.";
+    else if(!c.alloy.head)msg="Melt copper and add tin and lead to make the head alloy.";
     else if(!c.headMelt)msg="Pour the heads for this batch.";
-    else if(!c.tangMelt)msg=`${c.headMelt.id} cast. Now pour the tangs for this batch.`;
+    else if(!c.alloy.tang)msg="Now mix the tang alloy — the same metals, less tin.";
+    else if(!c.tangMelt)msg="Pour the tangs for this batch.";
     else if(c.rack.length||c.jig.head||c.jig.tang)msg=`${c.rack.length} of ${PER} joined. Nothing leaves this cell until the bundle is tied.`;
     else msg="Click a head and a tang into the jig.";
 
+    /* one crucible, charged twice: heads first, then tangs */
+    const onTang=!!c.headMelt, part=onTang?"tang":"head", pm=onTang?tM:hM;
+    const cState=c.mixing?"mixing"
+      : (onTang? (c.tangMelt?"spent":c.alloy.tang?"charged":"idle")
+               : (c.alloy.head?"charged":"idle"));
     col.innerHTML=`
-      <div class="cellhd">
-        <h4><span class="dot"></span>${CELLNAME[c.i]}</h4>
-        ${CRUCIBLE}
-      </div>
+      <div class="cellhd"><h4><span class="dot"></span>${CELLNAME[c.i]}</h4></div>
+      ${crucible(cState,cState==="charged"?pm.c:"")}
       <div class="pours">
-        <button class="btn" data-pour="head" ${c.headMelt||locked||c.busy?"disabled":""}>
+        <span class="stepno">heads</span>
+        <button class="btn" data-alloy="head" ${c.alloy.head||locked||c.mixing?"disabled":""}>
+          ${c.alloy.head?`<i class="sw" style="background:${hM.c}"></i>Sn ${hM.sn.toFixed(1)}% · Pb ${hM.pb.toFixed(1)}%`
+            :c.mixing==="head"?"Mixing…":"Mix Cu + Sn + Pb"}</button>
+        <button class="btn" data-pour="head" ${!c.alloy.head||c.headMelt||locked||c.busy||c.mixing?"disabled":""}>
           ${c.headMelt?`Heads cast · ${c.headMelt.id}`:"Pour head melt"}</button>
-        <button class="btn" data-pour="tang" ${c.tangMelt||locked||c.busy?"disabled":""}>
+        <span class="stepno">tangs</span>
+        <button class="btn" data-alloy="tang" ${c.alloy.tang||locked||c.mixing||!c.headMelt?"disabled":""}>
+          ${c.alloy.tang?`<i class="sw" style="background:${tM.c}"></i>Sn ${tM.sn.toFixed(1)}% · Pb ${tM.pb.toFixed(1)}%`
+            :c.mixing==="tang"?"Mixing…":"Mix Cu + Sn + Pb"}</button>
+        <button class="btn" data-pour="tang" ${!c.alloy.tang||c.tangMelt||locked||c.busy||c.mixing?"disabled":""}>
           ${c.tangMelt?`Tangs cast · ${c.tangMelt.id}`:"Pour tang melt"}</button>
       </div>
       <div class="cellstock">
@@ -693,6 +766,7 @@ function renderC(){
       <div class="cellout"></div>`;
 
     col.querySelectorAll("[data-pour]").forEach(b=>b.onclick=()=>pourCell(c.i,b.dataset.pour));
+    col.querySelectorAll("[data-alloy]").forEach(b=>b.onclick=()=>alloyC(c.i,b.dataset.alloy));
 
     [["head",c.heads],["tang",c.tangs]].forEach(([kind,arr])=>{
       const row=col.querySelector(`[data-row="${kind}"]`);
